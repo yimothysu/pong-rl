@@ -1,0 +1,15 @@
+ale-py==0.8.1
+AutoROM==0.4.2
+AutoROM.accept-rom-license==0.6.1
+certifi==2024.2.2
+charset-normalizer==3.3.2
+click==8.1.7
+cloudpickle==3.0.0
+gym==0.26.2
+gym-notices==0.0.8
+idna==3.6
+importlib_resources==6.1.2
+numpy==1.26.4
+requests==2.31.0
+tqdm==4.66.2
+urllib3==2.2.1
