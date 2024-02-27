@@ -8,8 +8,14 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Train
+
+```sh
+python train.py
+```
+
 ## Run
 
 ```sh
-python main.py
+python run.py
 ```

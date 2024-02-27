@@ -6,22 +6,28 @@ import torch
 from torchtyping import TensorType
 
 
-def reward_to_go(rewards: TensorType["H"], discount_factor=0.99) -> TensorType["H"]:
+def reward_to_go(
+    rewards: TensorType["N", "H"], discount_factor=0.99
+) -> TensorType["N", "H"]:
     discount_powers = torch.pow(
-        torch.tensor(discount_factor), torch.arange(len(rewards))
+        torch.tensor(discount_factor), torch.arange(rewards.shape[-1])
     )
-    out = torch.flip(torch.cumsum(torch.flip(rewards * discount_powers, [0]), 0), [0])
+    out = torch.flip(
+        torch.cumsum(torch.flip(rewards * discount_powers, [-1]), -1), [-1]
+    )
     return out
 
 
-def baseline(trajectory_rewards: TensorType["H"]):
+def baseline(trajectory_rewards: TensorType["N", "H"]):
     # TODO: Add baseline
     return 0
 
 
-def compute_advantage(trajectory_rewards: TensorType["H"]) -> torch.Tensor:
+def compute_advantage(trajectory_rewards: TensorType["N", "H"]) -> torch.Tensor:
     """ """
-    return reward_to_go(trajectory_rewards) - baseline(trajectory_rewards)
+    out = reward_to_go(trajectory_rewards) - baseline(trajectory_rewards)
+    out = (out - out.mean()) / (out.std() + 1e-8)
+    return out
 
 
 class Model(torch.nn.Module):
@@ -50,21 +56,22 @@ class Policy:
             TensorType["N", "T"],
         ],
     ) -> torch.Tensor:
-        loss = torch.tensor(0.0)
-
         n_observations, n_actions, n_rewards = trajectories
-        for observations, actions, rewards in zip(n_observations, n_actions, n_rewards):
-            advantages = compute_advantage(rewards)
-            # print(advantages)
-            # print(self.prob(observations.reshape(observations.shape[0], -1), actions))
-            loss += (
-                torch.log(
-                    self.prob(observations.reshape(observations.shape[0], -1), actions)
-                )
-                * advantages
-            ).sum()
+        advantages = compute_advantage(n_rewards)
 
-        return -loss / n_rewards.shape[0]
+        loss = -(
+            torch.log(
+                self.prob(
+                    n_observations.reshape(
+                        n_observations.shape[0], n_observations.shape[1], -1
+                    ),
+                    n_actions,
+                )
+            )
+            * advantages
+        ).mean()
+
+        return loss
 
     def train(self, trajectories):
         loss = self._compute_loss(trajectories)
@@ -72,11 +79,23 @@ class Policy:
         self.optimizer.step()
         self.optimizer.zero_grad()
 
+        print("Loss:", loss.item())
+
     def prob(self, observation, action):
         """
         Return probability of taking an action given an observation.
         """
-        return self.model(observation)[torch.arange(observation.shape[0]), action]
+        return self.model(observation)[
+            torch.arange(observation.shape[0]).unsqueeze(1),
+            torch.arange(observation.shape[1]).unsqueeze(0),
+            action,
+        ]
 
     def act(self, observation):
         return torch.distributions.Categorical(self.model(observation)).sample().item()
+
+    def save(self, path):
+        torch.save(self.model.state_dict(), path)
+
+    def load(self, path):
+        self.model.load_state_dict(torch.load(path))
