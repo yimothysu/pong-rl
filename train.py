@@ -2,6 +2,8 @@
 Runs pong.
 """
 
+import argparse
+
 import gym
 import numpy as np
 import torch
@@ -14,9 +16,10 @@ from preprocess import preprocess
 env = gym.make("ALE/Pong-v5", full_action_space=False)
 
 obs_dim = preprocess(np.zeros((env.observation_space.shape))).numel()
-act_dim = env.action_space.n
+act_dim = 3
 
-policy = Policy(env, obs_dim, act_dim)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def collect_trajectory(policy: Policy, H: int = 100):
@@ -28,9 +31,15 @@ def collect_trajectory(policy: Policy, H: int = 100):
     prev_observation = preprocess(observation)
     observation = preprocess(observation)
     for _ in range(H):
-        action = policy.act(observation.flatten())
-        observation, reward, terminated, truncated, _ = env.step(action)
+        action = policy.act(
+            (observation - prev_observation).flatten().to(device=device)
+        )
+        env_action = [0, 2, 3][action]
+        observation, reward, terminated, truncated, _ = env.step(env_action)
         observation = preprocess(observation)
+        # Boost positive rewards (wins)
+        if reward > 0:
+            reward *= 10
 
         observations.append(observation - prev_observation)
         actions.append(action)
@@ -41,16 +50,16 @@ def collect_trajectory(policy: Policy, H: int = 100):
         if terminated or truncated:
             break
 
-    observations_content = torch.stack(observations, dim=0)
-    observations = torch.zeros((H, *observations_content.shape[1:]))
+    observations_content = torch.stack(observations, dim=0).to(device=device)
+    observations = torch.zeros((H, *observations_content.shape[1:])).to(device=device)
     observations[: observations_content.shape[0]] = observations_content
 
-    actions_content = torch.tensor(actions)
-    actions = torch.zeros(H, dtype=torch.int64)
+    actions_content = torch.tensor(actions).to(device=device)
+    actions = torch.zeros(H, dtype=torch.int64).to(device=device)
     actions[: actions_content.shape[0]] = actions_content
 
-    rewards_content = torch.tensor(rewards)
-    rewards = torch.zeros(H, dtype=torch.float32)
+    rewards_content = torch.tensor(rewards).to(device=device)
+    rewards = torch.zeros(H, dtype=torch.float32).to(device=device)
     rewards[: rewards_content.shape[0]] = rewards_content
 
     return observations, actions, rewards
@@ -77,15 +86,27 @@ def collect_trajectories(policy: Policy, N: int = 30, H: int = 100) -> tuple[
     return observations, actions, rewards
 
 
-def train():
-    EPOCHS = 20
-    for epoch in range(EPOCHS):
+def train(policy: Policy, epochs: int = 20):
+    for epoch in range(epochs):
         print("Epoch", epoch)
         trajectories = collect_trajectories(policy, H=800)
         policy.train(trajectories)
     policy.save("model.pt")
 
 
-train()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--load", action="store_true")
+    parser.add_argument("--epochs", type=int, default=20, required=False)
+    args = parser.parse_args()
 
-env.close()
+    policy = Policy(env, obs_dim, act_dim)
+    policy.model.to(device)
+
+    if args.load:
+        print("Loading model...")
+        policy.load("model.pt")
+    print(f"Training for {args.epochs} epochs...")
+
+    train(policy, args.epochs)
+    env.close()

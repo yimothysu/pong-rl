@@ -8,7 +8,7 @@ from preprocess import preprocess
 env = gym.make("ALE/Pong-v5", full_action_space=False)
 
 obs_dim = preprocess(np.zeros((env.observation_space.shape))).numel()
-act_dim = env.action_space.n
+act_dim = 3
 
 policy = Policy(env, obs_dim, act_dim)
 policy.load("model.pt")
@@ -25,7 +25,8 @@ for _ in range(10):
         observation = preprocess(observation)
         action = policy.act((observation - prev_observation).flatten())
         prev_observation = observation
-        observation, reward, terminated, truncated, _ = env.step(action)
+        env_action = [0, 2, 3][action]
+        observation, reward, terminated, truncated, _ = env.step(env_action)
         if terminated or truncated:
             break
 

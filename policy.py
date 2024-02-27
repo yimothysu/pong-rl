@@ -9,9 +9,10 @@ from torchtyping import TensorType
 def reward_to_go(
     rewards: TensorType["N", "H"], discount_factor=0.99
 ) -> TensorType["N", "H"]:
+    # TODO: Ignore zeros at the end of the tensor
     discount_powers = torch.pow(
         torch.tensor(discount_factor), torch.arange(rewards.shape[-1])
-    )
+    ).to(device=rewards.device)
     out = torch.flip(
         torch.cumsum(torch.flip(rewards * discount_powers, [-1]), -1), [-1]
     )
@@ -26,6 +27,7 @@ def baseline(trajectory_rewards: TensorType["N", "H"]):
 def compute_advantage(trajectory_rewards: TensorType["N", "H"]) -> torch.Tensor:
     """ """
     out = reward_to_go(trajectory_rewards) - baseline(trajectory_rewards)
+    # Normalize rewards
     out = (out - out.mean()) / (out.std() + 1e-8)
     return out
 
