@@ -100,7 +100,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=20, required=False)
     args = parser.parse_args()
 
-    policy = Policy(env, obs_dim, act_dim)
+    policy = Policy(obs_dim, act_dim)
     policy.model.to(device)
 
     if args.load:

@@ -10,7 +10,7 @@ env = gym.make("ALE/Pong-v5", full_action_space=False)
 obs_dim = preprocess(np.zeros((env.observation_space.shape))).numel()
 act_dim = 3
 
-policy = Policy(env, obs_dim, act_dim)
+policy = Policy(obs_dim, act_dim)
 policy.load("model.pt")
 
 
