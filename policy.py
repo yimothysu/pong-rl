@@ -43,8 +43,7 @@ class Model(torch.nn.Module):
 
 
 class Policy:
-    def __init__(self, env, obs_dim, act_dim):
-        self.env = env
+    def __init__(self, obs_dim, act_dim):
         self.model = Model(obs_dim, act_dim)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
@@ -56,6 +55,8 @@ class Policy:
             TensorType["N", "T"],
         ],
     ) -> torch.Tensor:
+        # n_observations:       (N, H, height, width) = (N, H, 80, 80)
+        # n_actions, n_rewards: (N, H)
         n_observations, n_actions, n_rewards = trajectories
         advantages = compute_advantage(n_rewards)
 
@@ -68,7 +69,6 @@ class Policy:
             )
             * advantages
         ).mean()
-
         return loss
 
     def _dist(self, obs):
