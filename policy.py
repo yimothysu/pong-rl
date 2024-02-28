@@ -9,13 +9,11 @@ from torchtyping import TensorType
 def reward_to_go(
     rewards: TensorType["N", "H"], discount_factor=0.99
 ) -> TensorType["N", "H"]:
-    # TODO: Ignore zeros at the end of the tensor
-    discount_powers = torch.pow(
-        torch.tensor(discount_factor), torch.arange(rewards.shape[-1])
-    ).to(device=rewards.device)
-    out = torch.flip(
-        torch.cumsum(torch.flip(rewards * discount_powers, [-1]), -1), [-1]
-    )
+    out = rewards.clone()
+    for i in range(rewards.shape[0]):
+        for j in range(rewards.shape[1] - 2, -1, -1):
+            if out[i, j] == 0:
+                out[i, j] = out[i, j + 1] * discount_factor
     return out
 
 
@@ -40,8 +38,8 @@ class Model(torch.nn.Module):
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
-        x = torch.softmax(self.fc2(x), dim=-1)
-        return x
+        logits = self.fc2(x)
+        return logits
 
 
 class Policy:
@@ -62,18 +60,19 @@ class Policy:
         advantages = compute_advantage(n_rewards)
 
         loss = -(
-            torch.log(
-                self.prob(
-                    n_observations.reshape(
-                        n_observations.shape[0], n_observations.shape[1], -1
-                    ),
-                    n_actions,
-                )
+            self.log_prob(
+                n_observations.reshape(
+                    n_observations.shape[0], n_observations.shape[1], -1
+                ),
+                n_actions,
             )
             * advantages
         ).mean()
 
         return loss
+
+    def _dist(self, obs):
+        return torch.distributions.Categorical(logits=self.model(obs))
 
     def train(self, trajectories):
         loss = self._compute_loss(trajectories)
@@ -83,18 +82,14 @@ class Policy:
 
         print("Loss:", loss.item())
 
-    def prob(self, observation, action):
+    def log_prob(self, obs, act):
         """
         Return probability of taking an action given an observation.
         """
-        return self.model(observation)[
-            torch.arange(observation.shape[0]).unsqueeze(1),
-            torch.arange(observation.shape[1]).unsqueeze(0),
-            action,
-        ]
+        return self._dist(obs).log_prob(act)
 
-    def act(self, observation):
-        return torch.distributions.Categorical(self.model(observation)).sample().item()
+    def act(self, obs):
+        return self._dist(obs).sample().item()
 
     def save(self, path):
         torch.save(self.model.state_dict(), path)

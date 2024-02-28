@@ -17,10 +17,10 @@ policy.load("model.pt")
 env.close()
 
 env = gym.make("ALE/Pong-v5", full_action_space=False, render_mode="human")
-for _ in range(10):
+for _ in range(3):
     observation, info = env.reset()
     prev_observation = preprocess(observation)
-    for _ in range(100):
+    for _ in range(800):
         env.render()
         observation = preprocess(observation)
         action = policy.act((observation - prev_observation).flatten())

@@ -8,6 +8,7 @@ import gym
 import numpy as np
 import torch
 from torchtyping import TensorType
+from tqdm import tqdm
 
 from policy import Policy
 from preprocess import preprocess
@@ -23,6 +24,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def collect_trajectory(policy: Policy, H: int = 100):
+    losses = 0
+    wins = 0
+
     observations = []
     actions = []
     rewards = []
@@ -37,9 +41,10 @@ def collect_trajectory(policy: Policy, H: int = 100):
         env_action = [0, 2, 3][action]
         observation, reward, terminated, truncated, _ = env.step(env_action)
         observation = preprocess(observation)
-        # Boost positive rewards (wins)
         if reward > 0:
-            reward *= 10
+            wins += 1
+        if reward < 0:
+            losses += 1
 
         observations.append(observation - prev_observation)
         actions.append(action)
@@ -62,10 +67,12 @@ def collect_trajectory(policy: Policy, H: int = 100):
     rewards = torch.zeros(H, dtype=torch.float32).to(device=device)
     rewards[: rewards_content.shape[0]] = rewards_content
 
+    print(f"Wins: {wins}, Losses: {losses}")
+
     return observations, actions, rewards
 
 
-def collect_trajectories(policy: Policy, N: int = 30, H: int = 100) -> tuple[
+def collect_trajectories(policy: Policy, N: int = 40, H: int = 100) -> tuple[
     TensorType["N", "T", "H", "W", "C"],
     TensorType["N", "T"],
     TensorType["N", "T"],
@@ -78,7 +85,7 @@ def collect_trajectories(policy: Policy, N: int = 30, H: int = 100) -> tuple[
     - 3 is the number of elements in the tuple (states, actions, rewards)
     - H is the length of the trajectory
     """
-    trajectories = [collect_trajectory(policy, H) for _ in range(N)]
+    trajectories = [collect_trajectory(policy, H) for _ in tqdm(range(N))]
     observations = torch.stack([trajectory[0] for trajectory in trajectories], dim=0)
     actions = torch.stack([trajectory[1] for trajectory in trajectories], dim=0)
     rewards = torch.stack([trajectory[2] for trajectory in trajectories], dim=0)
