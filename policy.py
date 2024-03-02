@@ -6,15 +6,12 @@ import torch
 from torchtyping import TensorType
 
 
-def reward_to_go(
-    rewards: TensorType["N", "H"], discount_factor=0.99
-) -> TensorType["N", "H"]:
-    out = rewards.clone()
-    for i in range(rewards.shape[0]):
-        for j in range(rewards.shape[1] - 2, -1, -1):
-            if out[i, j] == 0:
-                out[i, j] = out[i, j + 1] * discount_factor
-    return out
+def reward_to_go(rewards: list[float], discount_factor=0.99) -> torch.Tensor:
+    out = rewards[:]
+    for j in range(len(rewards) - 2, -1, -1):
+        if out[j] == 0:
+            out[j] = out[j + 1] * discount_factor
+    return torch.tensor(out)
 
 
 def baseline(trajectory_rewards: TensorType["N", "H"]):
@@ -22,7 +19,7 @@ def baseline(trajectory_rewards: TensorType["N", "H"]):
     return 0
 
 
-def compute_advantage(trajectory_rewards: TensorType["N", "H"]) -> torch.Tensor:
+def compute_advantage(trajectory_rewards: list[float]) -> torch.Tensor:
     """ """
     out = reward_to_go(trajectory_rewards) - baseline(trajectory_rewards)
     # Normalize rewards
@@ -58,17 +55,22 @@ class Policy:
         # n_observations:       (N, H, height, width) = (N, H, 80, 80)
         # n_actions, n_rewards: (N, H)
         n_observations, n_actions, n_rewards = trajectories
-        advantages = compute_advantage(n_rewards)
+        device = n_observations[0][0].device
 
-        loss = -(
-            self.log_prob(
-                n_observations.reshape(
-                    n_observations.shape[0], n_observations.shape[1], -1
-                ),
-                n_actions,
+        terms = torch.zeros((len(n_observations),)).to(device=device)
+        for i, (observations, actions, rewards) in enumerate(
+            zip(n_observations, n_actions, n_rewards)
+        ):
+            advantages = compute_advantage(rewards).to(device=device)
+            observations = torch.stack([obs.flatten() for obs in observations]).to(
+                device=device
             )
-            * advantages
-        ).mean()
+            terms[i] = (
+                self.log_prob(observations, torch.tensor(actions).to(device=device))
+                * advantages.to(device=device)
+            ).sum()
+
+        loss = -terms.mean()
         return loss
 
     def _dist(self, obs):
@@ -76,6 +78,8 @@ class Policy:
 
     def train(self, trajectories):
         loss = self._compute_loss(trajectories)
+        assert not torch.isnan(loss).any(), "Loss is NaN!"
+
         loss.backward()
         self.optimizer.step()
         self.optimizer.zero_grad()
