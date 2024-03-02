@@ -17,7 +17,7 @@ from preprocess import preprocess
 env = gym.make("ALE/Pong-v5", full_action_space=False)
 
 obs_dim = preprocess(np.zeros((env.observation_space.shape))).numel()
-act_dim = 3
+act_dim = 2
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -39,7 +39,7 @@ def collect_trajectory(policy: Policy):
     while not terminated and not truncated:
         diff = (observation - prev_observation).to(device=device)
         action = policy.act(diff.flatten())
-        env_action = [0, 2, 3][action]
+        env_action = [2, 3][action]
 
         observations.append(diff)
         actions.append(action)
@@ -49,7 +49,6 @@ def collect_trajectory(policy: Policy):
         observation = preprocess(observation)
         if reward > 0:
             wins += 1
-            reward *= 5
         if reward < 0:
             losses += 1
 

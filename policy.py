@@ -78,8 +78,6 @@ class Policy:
 
     def train(self, trajectories):
         loss = self._compute_loss(trajectories)
-        assert not torch.isnan(loss).any(), "Loss is NaN!"
-
         loss.backward()
         self.optimizer.step()
         self.optimizer.zero_grad()
