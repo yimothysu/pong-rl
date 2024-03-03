@@ -1,3 +1,4 @@
+from os import truncate
 import gym
 import numpy as np
 
@@ -18,17 +19,15 @@ policy.model.eval()
 env.close()
 
 env = gym.make("ALE/Pong-v5", full_action_space=False, render_mode="human")
-for _ in range(3):
-    observation, info = env.reset()
-    prev_observation = preprocess(observation)
-    for _ in range(800):
-        env.render()
-        observation = preprocess(observation)
-        action = policy.act((observation - prev_observation).flatten())
-        prev_observation = observation
-        env_action = [2, 3][action]
-        observation, reward, terminated, truncated, _ = env.step(env_action)
-        if terminated or truncated:
-            break
+terminated, truncated = False, False
+observation, info = env.reset()
+prev_observation = preprocess(observation)
+while not terminated and not truncated:
+    env.render()
+    observation = preprocess(observation)
+    action = policy.act((observation - prev_observation).flatten())
+    prev_observation = observation
+    env_action = [2, 3][action]
+    observation, reward, terminated, truncated, _ = env.step(env_action)
 
 env.close()

@@ -11,11 +11,15 @@ pip install -r requirements.txt
 ## Train
 
 ```sh
-python train.py
+python train.py --epochs <NUM_EPOCHS>
 ```
+
+After training for 1,000 epochs, the model becomes able to outplay the opponent.
 
 ## Run
 
 ```sh
 python run.py
 ```
+
+To use pretrained weights, rename `model_1000.pt` to `model.pt` and run.
